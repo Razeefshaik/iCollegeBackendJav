@@ -15,16 +15,13 @@ public class CustomUserDetails implements UserDetails {
     private final UserInfo user;
     public CustomUserDetails(UserInfo user) { this.user = user; }
 
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         List<GrantedAuthority> authorities = new ArrayList<>();
         if (user.getRole() != null) {
+            // This maps Role.STUDENT -> "ROLE_STUDENT" and Role.ADMIN -> "ROLE_ADMIN"
             authorities.add(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
-            if (user.getRole() == Role.ADMIN ) {
-                authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
-            } else if (user.getRole() == Role.STUDENT) {
-                authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
-            }
         }
         return authorities;
     }
