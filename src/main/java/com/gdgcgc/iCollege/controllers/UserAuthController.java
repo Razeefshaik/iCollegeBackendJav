@@ -1,5 +1,6 @@
 package com.gdgcgc.iCollege.controllers;
 
+import com.gdgcgc.iCollege.dtos.AdminRegisterRequest;
 import com.gdgcgc.iCollege.dtos.AuthResponse;
 import com.gdgcgc.iCollege.dtos.LoginRequest;
 import com.gdgcgc.iCollege.dtos.RegisterRequest;
@@ -15,6 +16,11 @@ public class UserAuthController {
 
     public UserAuthController(UserAuthService authService) {
         this.authService = authService;
+    }
+
+    @PostMapping("/register-admin")
+    public ResponseEntity<AuthResponse> registerAdmin(@RequestBody AdminRegisterRequest request) {
+        return ResponseEntity.ok(authService.registerAdmin(request));
     }
 
     @PostMapping("/register")

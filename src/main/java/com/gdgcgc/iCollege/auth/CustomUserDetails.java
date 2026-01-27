@@ -22,7 +22,7 @@ public class CustomUserDetails implements UserDetails {
             authorities.add(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
             if (user.getRole() == Role.ADMIN ) {
                 authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
-            } else if (user.getRole() == Role.USER) {
+            } else if (user.getRole() == Role.STUDENT) {
                 authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
             }
         }
