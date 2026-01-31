@@ -1,12 +1,11 @@
 package com.gdgcgc.iCollege.controllers;
 
-import com.gdgcgc.iCollege.dtos.AdminRegisterRequest;
-import com.gdgcgc.iCollege.dtos.AuthResponse;
-import com.gdgcgc.iCollege.dtos.LoginRequest;
-import com.gdgcgc.iCollege.dtos.RegisterRequest;
+import com.gdgcgc.iCollege.dtos.*;
 import com.gdgcgc.iCollege.services.UserAuthService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.security.Principal;
 
 @RestController
 @RequestMapping("/auth")
@@ -18,13 +17,24 @@ public class UserAuthController {
         this.authService = authService;
     }
 
+    @GetMapping("/me")
+    public ResponseEntity<ProfileResponse> getMyProfile(Principal principal) {
+        // principal.getName() returns the scholarId because of your UserDetails config
+        return ResponseEntity.ok(authService.getMyProfile(principal.getName()));
+    }
+
     @PostMapping("/register-admin")
     public ResponseEntity<AuthResponse> registerAdmin(@RequestBody AdminRegisterRequest request) {
         return ResponseEntity.ok(authService.registerAdmin(request));
     }
 
+    @PostMapping("/verify")
+    public ResponseEntity<AuthResponse> verify(@RequestParam String email, @RequestParam String otp) {
+        return ResponseEntity.ok(authService.verifyOtp(email, otp));
+    }
+
     @PostMapping("/register")
-    public ResponseEntity<AuthResponse> register(@RequestBody RegisterRequest request) {
+    public ResponseEntity<String> register(@RequestBody RegisterRequest request) {
         return ResponseEntity.ok(authService.register(request));
     }
 

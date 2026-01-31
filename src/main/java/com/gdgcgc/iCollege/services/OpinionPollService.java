@@ -109,6 +109,7 @@ public class OpinionPollService {
 
         return mapToResponse(pollRepository.save(poll));
     }
+
     public List<PollResponse> getAllPolls() {
         return pollRepository.findAll().stream()
                 .map(this::mapToResponse)
