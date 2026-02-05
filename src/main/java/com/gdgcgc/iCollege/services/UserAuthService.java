@@ -84,12 +84,7 @@ public class UserAuthService {
         // 4. Save to DB
         userRepository.save(user);
 
-        // Generate and Send OTP
-        String otp = String.valueOf(new Random().nextInt(900000) + 100000); // 6-digit OTP
-        OtpToken token = new OtpToken(request.getScholarId(), otp);
-        otpTokenRepository.save(token);
-
-        emailService.sendOtpEmail(request.getEmail(), otp);
+        generateAndSendOtp(user.getScholarId(), user.getEmail(), "REGISTRATION");
 
         return "Registration successful. Please check your email for OTP.";
 
@@ -149,12 +144,7 @@ public class UserAuthService {
         // 4. Save to DB
         userRepository.save(user);
 
-        // Generate and Send OTP
-        String otp = String.valueOf(new Random().nextInt(900000) + 100000); // 6-digit OTP
-        OtpToken token = new OtpToken(request.getScholarId(), otp);
-        otpTokenRepository.save(token);
-
-        emailService.sendOtpEmail(request.getEmail(), otp);
+        generateAndSendOtp(user.getScholarId(), user.getEmail(), "REGISTRATION");
 
         return "Registration successful. Please check your email for OTP.";
     }
@@ -176,4 +166,71 @@ public class UserAuthService {
         String token = jwtService.generateToken(new CustomUserDetails(user));
         return new AuthResponse(token);
     }
+
+    public String resendRegistrationOtp(String scholarId) {
+        UserInfo user = userRepository.findByScholarId(scholarId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (user.isVerified()) {
+            return "User is already verified. You can login.";
+        }
+
+        generateAndSendOtp(user.getScholarId(), user.getEmail(), "REGISTRATION");
+        return "OTP resent successfully.";
+    }
+
+    public String forgotPassword(String scholarId) {
+        UserInfo user = userRepository.findByScholarId(scholarId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        generateAndSendOtp(user.getScholarId(), user.getEmail(), "RESET");
+        return "Password reset OTP sent to registered email.";
+    }
+
+
+    public String resetPassword(ResetPasswordRequest request) {
+        // 1. Verify OTP
+        OtpToken otpToken = otpTokenRepository.findByScholarId(request.getScholarId())
+                .orElseThrow(() -> new RuntimeException("Invalid Scholar ID or OTP expired"));
+
+        if (!otpToken.getOtp().equals(request.getOtp()) ||
+                LocalDateTime.now().isAfter(otpToken.getExpiresAt())) {
+            throw new RuntimeException("Invalid or Expired OTP");
+        }
+
+        // 2. Change Password
+        UserInfo user = userRepository.findByScholarId(request.getScholarId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+
+        // 3. Cleanup
+        otpTokenRepository.delete(otpToken);
+
+        return "Password reset successful. You can now login.";
+    }
+
+    private void generateAndSendOtp(String scholarId, String email, String type) {
+        String otp = String.valueOf(new Random().nextInt(900000) + 100000);
+
+        // BUG FIX: Check if token exists FIRST. If yes, update it. If no, create new.
+        OtpToken token = otpTokenRepository.findByScholarId(scholarId)
+                .orElse(new OtpToken(scholarId, otp));
+
+        // Always update the OTP and Expiry
+        token.setOtp(otp);
+        token.setExpiresAt(LocalDateTime.now().plusMinutes(10));
+        token.setScholarId(scholarId); // Ensure scholarId is set if it was a new object
+
+        otpTokenRepository.save(token);
+
+        if ("RESET".equals(type)) {
+            emailService.sendPasswordResetEmail(email, otp);
+        } else {
+            emailService.sendOtpEmail(email, otp);
+        }
+    }
+
+
 }
