@@ -24,13 +24,13 @@ public class UserAuthController {
     }
 
     @PostMapping("/register-admin")
-    public ResponseEntity<AuthResponse> registerAdmin(@RequestBody AdminRegisterRequest request) {
+    public ResponseEntity<String> registerAdmin(@RequestBody AdminRegisterRequest request) {
         return ResponseEntity.ok(authService.registerAdmin(request));
     }
 
     @PostMapping("/verify")
-    public ResponseEntity<AuthResponse> verify(@RequestParam String email, @RequestParam String otp) {
-        return ResponseEntity.ok(authService.verifyOtp(email, otp));
+    public ResponseEntity<AuthResponse> verify(@RequestParam String scholarId, @RequestParam String otp) {
+        return ResponseEntity.ok(authService.verifyOtp(scholarId, otp));
     }
 
     @PostMapping("/register")

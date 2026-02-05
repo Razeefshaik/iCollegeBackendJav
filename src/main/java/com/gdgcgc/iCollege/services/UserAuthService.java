@@ -86,7 +86,7 @@ public class UserAuthService {
 
         // Generate and Send OTP
         String otp = String.valueOf(new Random().nextInt(900000) + 100000); // 6-digit OTP
-        OtpToken token = new OtpToken(request.getEmail(), otp);
+        OtpToken token = new OtpToken(request.getScholarId(), otp);
         otpTokenRepository.save(token);
 
         emailService.sendOtpEmail(request.getEmail(), otp);
@@ -96,16 +96,16 @@ public class UserAuthService {
     }
 
 
-    public AuthResponse verifyOtp(String email, String otp) {
-        OtpToken otpToken = otpTokenRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Invalid Email"));
+    public AuthResponse verifyOtp(String scholarId, String otp) {
+        OtpToken otpToken = otpTokenRepository.findByScholarId(scholarId)
+                .orElseThrow(() -> new RuntimeException("Invalid scholarId"));
 
         if (!otpToken.getOtp().equals(otp) || LocalDateTime.now().isAfter(otpToken.getExpiresAt())) {
             throw new RuntimeException("Invalid or Expired OTP");
         }
 
         // Activate User
-        UserInfo user = userRepository.findByEmail(email)
+        UserInfo user = userRepository.findByScholarId(scholarId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         user.setVerified(true);
         userRepository.save(user);
@@ -119,7 +119,7 @@ public class UserAuthService {
     }
 
 
-    public AuthResponse registerAdmin(AdminRegisterRequest request) {
+    public String registerAdmin(AdminRegisterRequest request) {
         // 1. Verify the secret passkey
         if (request.getPasskey() == null || !request.getPasskey().equals(secretPasskey)) {
             throw new RuntimeException("Unauthorized: Invalid Admin Passkey");
@@ -144,13 +144,19 @@ public class UserAuthService {
         user.setPublicName(request.getPublicName());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setRole(Role.ADMIN); // Set role to ADMIN
+        user.setVerified(false);
 
         // 4. Save to DB
         userRepository.save(user);
 
-        // 5. Generate Token
-        String token = jwtService.generateToken(new CustomUserDetails(user));
-        return new AuthResponse(token);
+        // Generate and Send OTP
+        String otp = String.valueOf(new Random().nextInt(900000) + 100000); // 6-digit OTP
+        OtpToken token = new OtpToken(request.getScholarId(), otp);
+        otpTokenRepository.save(token);
+
+        emailService.sendOtpEmail(request.getEmail(), otp);
+
+        return "Registration successful. Please check your email for OTP.";
     }
 
     public AuthResponse login(LoginRequest request) {

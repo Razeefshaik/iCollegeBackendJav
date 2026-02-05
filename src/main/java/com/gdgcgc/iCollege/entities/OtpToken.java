@@ -14,12 +14,12 @@ public class OtpToken {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
 
-    private String email;
+    private String scholarId;
     private String otp;
     private LocalDateTime expiresAt;
 
-    public OtpToken(String email, String otp) {
-        this.email = email;
+    public OtpToken(String scholarId, String otp) {
+        this.scholarId = scholarId;
         this.otp = otp;
         this.expiresAt = LocalDateTime.now().plusMinutes(10); // OTP valid for 10 mins
     }
