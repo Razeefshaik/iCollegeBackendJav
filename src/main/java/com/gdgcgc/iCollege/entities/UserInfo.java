@@ -19,8 +19,11 @@ public class UserInfo {
     private String publicName;
     private String email;
     private String password;
-
     @Column(unique = true) private String scholarId;
+
+    @Column(nullable = false)
+    private boolean isVerified = false;
+
 
     @Enumerated(EnumType.STRING) private Role role;
 

@@ -1,9 +1,11 @@
 package com.gdgcgc.iCollege.controllers.complaint;
 
 import com.gdgcgc.iCollege.dtos.complaintDTOs.ComplaintRequest;
+import com.gdgcgc.iCollege.entities.enums.ComplaintStatus;
 import com.gdgcgc.iCollege.services.complaint.ComplaintService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
@@ -22,6 +24,16 @@ public class ComplaintController {
     public ResponseEntity<?> createComplaint(@RequestBody ComplaintRequest request, Principal principal) {
         try {
             return ResponseEntity.ok(complaintService.createComplaint(principal.getName(), request));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<?> updateStatus(@PathVariable Long id, @RequestParam ComplaintStatus status) {
+        try {
+            return ResponseEntity.ok(complaintService.updateStatus(id, status));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }

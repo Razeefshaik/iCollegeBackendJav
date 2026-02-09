@@ -2,36 +2,66 @@ package com.gdgcgc.iCollege.services;
 
 import com.gdgcgc.iCollege.auth.CustomUserDetails;
 import com.gdgcgc.iCollege.auth.JWTService;
-import com.gdgcgc.iCollege.dtos.AuthResponse;
-import com.gdgcgc.iCollege.dtos.LoginRequest;
-import com.gdgcgc.iCollege.dtos.RegisterRequest;
+import com.gdgcgc.iCollege.dtos.*;
+import com.gdgcgc.iCollege.entities.OtpToken;
 import com.gdgcgc.iCollege.entities.UserInfo;
 import com.gdgcgc.iCollege.entities.enums.Role;
+import com.gdgcgc.iCollege.repos.OtpTokenRepository;
 import com.gdgcgc.iCollege.repos.UserRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.util.Optional;
+import java.util.Random;
+
 @Service
 public class UserAuthService {
 
+    @Value("${admin.registration.passkey}")
+    private String secretPasskey;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JWTService jwtService;
     private final AuthenticationManager authenticationManager;
+    private final OtpTokenRepository otpTokenRepository;
+    private final EmailService emailService;
 
     public UserAuthService(UserRepository userRepository,
                            PasswordEncoder passwordEncoder,
                            JWTService jwtService,
-                           AuthenticationManager authenticationManager) {
+                           AuthenticationManager authenticationManager,
+                           OtpTokenRepository otpTokenRepository,
+                           EmailService emailService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.authenticationManager = authenticationManager;
+        this.otpTokenRepository=otpTokenRepository;
+        this.emailService=emailService;
     }
 
-    public AuthResponse register(RegisterRequest request) {
+
+    // In UserAuthService.java
+
+    public ProfileResponse getMyProfile(String scholarId) {
+        UserInfo user = userRepository.findByScholarId(scholarId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        return new ProfileResponse(
+                user.getName(),
+                user.getPublicName(),
+                user.getEmail(),
+                user.getScholarId(),
+                user.getRole()
+        );
+    }
+
+
+    public String register(RegisterRequest request) {
         // 1. Check if user already exists
         if (userRepository.existsByScholarId(request.getScholarId())) {
             throw new RuntimeException("User with this Scholar ID already exists");
@@ -46,17 +76,77 @@ public class UserAuthService {
         user.setPublicName(request.getPublicName());
         user.setEmail(request.getEmail());
         user.setScholarId(request.getScholarId());
-        user.setRole(Role.USER); // Default role is USER
-
+        user.setRole(Role.STUDENT); // Default role is USER
+        user.setVerified(false);
         // 3. Encrypt the password
         user.setPassword(passwordEncoder.encode(request.getPassword()));
 
         // 4. Save to DB
         userRepository.save(user);
 
-        // 5. Generate Token immediately so they don't have to login again
+        generateAndSendOtp(user.getScholarId(), user.getEmail(), "REGISTRATION");
+
+        return "Registration successful. Please check your email for OTP.";
+
+    }
+
+
+    public AuthResponse verifyOtp(String scholarId, String otp) {
+        OtpToken otpToken = otpTokenRepository.findByScholarId(scholarId)
+                .orElseThrow(() -> new RuntimeException("Invalid scholarId"));
+
+        if (!otpToken.getOtp().equals(otp) || LocalDateTime.now().isAfter(otpToken.getExpiresAt())) {
+            throw new RuntimeException("Invalid or Expired OTP");
+        }
+
+        // Activate User
+        UserInfo user = userRepository.findByScholarId(scholarId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        user.setVerified(true);
+        userRepository.save(user);
+
+        // Clean up OTP
+        otpTokenRepository.delete(otpToken);
+
+        // Return JWT
         String token = jwtService.generateToken(new CustomUserDetails(user));
         return new AuthResponse(token);
+    }
+
+
+    public String registerAdmin(AdminRegisterRequest request) {
+        // 1. Verify the secret passkey
+        if (request.getPasskey() == null || !request.getPasskey().equals(secretPasskey)) {
+            throw new RuntimeException("Unauthorized: Invalid Admin Passkey");
+        }
+
+        // 2. Check if user already exists
+        Optional<UserInfo> existingUser = userRepository.findByScholarId(request.getScholarId());
+        UserInfo user;
+
+        if (existingUser.isPresent()) {
+            // Update existing user to ADMIN role
+            user = existingUser.get();
+        } else {
+            // Create new Admin user
+            user = new UserInfo();
+            user.setScholarId(request.getScholarId());
+            user.setEmail(request.getEmail());
+        }
+
+        // 3. Update/Set fields
+        user.setName(request.getName());
+        user.setPublicName(request.getPublicName());
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setRole(Role.ADMIN); // Set role to ADMIN
+        user.setVerified(false);
+
+        // 4. Save to DB
+        userRepository.save(user);
+
+        generateAndSendOtp(user.getScholarId(), user.getEmail(), "REGISTRATION");
+
+        return "Registration successful. Please check your email for OTP.";
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -76,4 +166,71 @@ public class UserAuthService {
         String token = jwtService.generateToken(new CustomUserDetails(user));
         return new AuthResponse(token);
     }
+
+    public String resendRegistrationOtp(String scholarId) {
+        UserInfo user = userRepository.findByScholarId(scholarId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (user.isVerified()) {
+            return "User is already verified. You can login.";
+        }
+
+        generateAndSendOtp(user.getScholarId(), user.getEmail(), "REGISTRATION");
+        return "OTP resent successfully.";
+    }
+
+    public String forgotPassword(String scholarId) {
+        UserInfo user = userRepository.findByScholarId(scholarId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        generateAndSendOtp(user.getScholarId(), user.getEmail(), "RESET");
+        return "Password reset OTP sent to registered email.";
+    }
+
+
+    public String resetPassword(ResetPasswordRequest request) {
+        // 1. Verify OTP
+        OtpToken otpToken = otpTokenRepository.findByScholarId(request.getScholarId())
+                .orElseThrow(() -> new RuntimeException("Invalid Scholar ID or OTP expired"));
+
+        if (!otpToken.getOtp().equals(request.getOtp()) ||
+                LocalDateTime.now().isAfter(otpToken.getExpiresAt())) {
+            throw new RuntimeException("Invalid or Expired OTP");
+        }
+
+        // 2. Change Password
+        UserInfo user = userRepository.findByScholarId(request.getScholarId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+
+        // 3. Cleanup
+        otpTokenRepository.delete(otpToken);
+
+        return "Password reset successful. You can now login.";
+    }
+
+    private void generateAndSendOtp(String scholarId, String email, String type) {
+        String otp = String.valueOf(new Random().nextInt(900000) + 100000);
+
+        // BUG FIX: Check if token exists FIRST. If yes, update it. If no, create new.
+        OtpToken token = otpTokenRepository.findByScholarId(scholarId)
+                .orElse(new OtpToken(scholarId, otp));
+
+        // Always update the OTP and Expiry
+        token.setOtp(otp);
+        token.setExpiresAt(LocalDateTime.now().plusMinutes(10));
+        token.setScholarId(scholarId); // Ensure scholarId is set if it was a new object
+
+        otpTokenRepository.save(token);
+
+        if ("RESET".equals(type)) {
+            emailService.sendPasswordResetEmail(email, otp);
+        } else {
+            emailService.sendOtpEmail(email, otp);
+        }
+    }
+
+
 }

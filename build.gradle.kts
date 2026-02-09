@@ -45,6 +45,9 @@ dependencies {
 
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0")
 
+	//For mail
+	implementation("org.springframework.boot:spring-boot-starter-mail")
+
 
 }
 

@@ -5,12 +5,14 @@ import com.gdgcgc.iCollege.dtos.complaintDTOs.ComplaintRequest;
 import com.gdgcgc.iCollege.dtos.complaintDTOs.ComplaintResponse;
 import com.gdgcgc.iCollege.entities.Complaint;
 import com.gdgcgc.iCollege.entities.UserInfo;
+import com.gdgcgc.iCollege.entities.enums.ComplaintStatus;
 import com.gdgcgc.iCollege.repos.ComplaintRepository;
 import com.gdgcgc.iCollege.repos.UserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -43,6 +45,15 @@ public class ComplaintService {
         return mapToResponse(savedComplaint);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
+    public ComplaintResponse updateStatus(Long complaintId, ComplaintStatus newStatus) {
+        Complaint complaint = complaintRepository.findById(complaintId)
+                .orElseThrow(() -> new RuntimeException("Complaint not found"));
+
+        complaint.setStatus(newStatus);
+        return mapToResponse(complaintRepository.save(complaint));
+    }
+
     public Page<ComplaintResponse> getAllComplaints(int page, int size){
 
         Pageable pageable= PageRequest.of(page,size, Sort.by("createdAt").descending());
@@ -56,7 +67,7 @@ public class ComplaintService {
         UserInfo user = userRepository.findByScholarId(scholarId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        //
+
         return complaintRepository.findByUserId(user.getId()).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
